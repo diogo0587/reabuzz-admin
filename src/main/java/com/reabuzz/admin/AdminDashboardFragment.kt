@@ -16,7 +16,8 @@ class AdminDashboardFragment : Fragment() {
         "Revoke Role", 
         "View Audit Log",
         "Manage Users",
-        "System Settings"
+        "System Settings",
+        "VIP Admin Panel"
     )
 
     override fun onCreateView(
@@ -90,6 +91,15 @@ class AdminDashboardFragment : Fragment() {
                                         }
                                     ) {
                                         Text("View Audit Log")
+                                    }
+                                } else if (action == "VIP Admin Panel") {
+                                    Button(
+                                        onClick = {
+                                            // VIP admin exclusive features
+                                            Log.d("AdminDashboard", "VIP Admin Panel accessed")
+                                        }
+                                    ) {
+                                        Text("Open VIP Panel")
                                     }
                                 }
                             }
