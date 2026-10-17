@@ -1,0 +1,362 @@
+name: CI - Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  GRADLE_OPTS: "-Xmx2048m -Dfile.encoding=UTF-8"
+  JAVA_VERSION: "17"
+  ANDROID_SDK_VERSION: "34"
+  ANDROID_NDK_VERSION: "26.1.10909125"
+  CMAKE_VERSION: "3.22.1"
+
+jobs:
+  # ============================================================
+  # LINT & STATIC ANALYSIS
+  # ============================================================
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Run Lint
+        run: ./gradlew lint --stacktrace
+
+      - name: Upload Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: |
+            **/build/reports/lint-results*.html
+            **/build/reports/lint-results*.xml
+
+      - name: Run Detekt (if configured)
+        run: ./gradlew detekt --stacktrace || true
+
+  # ============================================================
+  # UNIT TESTS
+  # ============================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Run Unit Tests
+        run: ./gradlew test --stacktrace --continue
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            **/build/reports/tests/**/*.html
+            **/build/test-results/**/*.xml
+
+      - name: Upload Coverage (if Jacoco configured)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            **/build/reports/jacoco/**/*.html
+            **/build/reports/jacoco/**/*.xml
+
+  # ============================================================
+  # INSTRUMENTED TESTS (with emulator)
+  # ============================================================
+  instrumented-tests:
+    name: Instrumented Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_SDK_VERSION }}
+          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          cmake-version: ${{ env.CMAKE_VERSION }}
+          emulator: true
+          arch: arm64
+          cache-key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_VERSION }}
+
+      - name: Create and Start Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.ANDROID_SDK_VERSION }}
+          arch: arm64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: ./gradlew connectedAndroidTest --stacktrace
+
+      - name: Upload Instrumented Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-reports
+          path: |
+            **/build/reports/androidTests/**/*.html
+            **/build/outputs/androidTest-results/**/*.xml
+
+  # ============================================================
+  # BUILD DEBUG APK
+  # ============================================================
+  build-debug:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint, unit-tests]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_SDK_VERSION }}
+          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          cmake-version: ${{ env.CMAKE_VERSION }}
+          cache-key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_VERSION }}
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK
+        run: |
+          APK_PATH=$(find . -name "*.apk" -path "*/debug/*" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No debug APK found!"
+            exit 1
+          fi
+          echo "✅ Debug APK found at: $APK_PATH"
+          ls -lh "$APK_PATH"
+          # Verify APK structure
+          unzip -l "$APK_PATH" | head -20
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  # ============================================================
+  # BUILD RELEASE APK (requires signing config)
+  # ============================================================
+  build-release:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [lint, unit-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_SDK_VERSION }}
+          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          cmake-version: ${{ env.CMAKE_VERSION }}
+          cache-key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_VERSION }}
+
+      - name: Setup Signing Key
+        if: env.RELEASE_STORE_FILE != ''
+        run: |
+          echo "${{ secrets.RELEASE_STORE_FILE }}" | base64 -d > keystore.jks
+          echo "keystore.jks created"
+        env:
+          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Verify Release APK
+        run: |
+          APK_PATH=$(find . -name "*.apk" -path "*/release/*" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No release APK found!"
+            exit 1
+          fi
+          echo "✅ Release APK found at: $APK_PATH"
+          ls -lh "$APK_PATH"
+          # Verify signing
+          apksigner verify --print-certs "$APK_PATH"
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: |
+            **/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  # ============================================================
+  # SECURITY SCANNING
+  # ============================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Dependency Vulnerability Scan (OWASP)
+        uses: dependency-check/Dependency-Check_Action@main
+        id: depcheck
+        with:
+          project: 'ReaBuzz Admin'
+          path: '.'
+          format: 'HTML'
+          out: 'reports'
+          args: >
+            --failOnCVSS 7
+            --suppression './dependency-check-suppression.xml'
+
+      - name: Upload Dependency Check Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports/*.html
+
+      - name: Secret Scanning (GitLeaks)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: --verbose --no-banner
+
+  # ============================================================
+  # SUMMARY
+  # ============================================================
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint, unit-tests, instrumented-tests, build-debug, build-release, security-scan]
+    if: always()
+    steps:
+      - name: Check Job Statuses
+        run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Check each needed job
+          for job in lint unit-tests instrumented-tests build-debug build-release security-scan; do
+            status="${{ needs.$job.result }}"
+            if [ "$status" == "success" ]; then
+              echo "| $job | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$status" == "failure" ]; then
+              echo "| $job | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$status" == "skipped" ]; then
+              echo "| $job | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $job | ❓ $status |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if any required job failed
+        if: contains(needs.*.result, 'failure')
+        run: |
+          echo "❌ One or more required jobs failed"
+          exit 1
