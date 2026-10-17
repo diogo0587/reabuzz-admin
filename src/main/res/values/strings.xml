@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">ReaBuzz</string>
+    <string name="welcome_message">Welcome to the Application</string>
+    <string name="menu_home">Home</string>
+    <string name="menu_profile">Profile</string>
+    <string name="menu_admin">Admin</string>
+    <string name="login_as_admin">Login as Admin</string>
+    <string name="logout">Logout</string>
+    <string name="assign_role">Assign Role</string>
+    <string name="view_audit_log">View Audit Log</string>
+    <string name="security_notice">Security Notice</string>
+    <string name="admin_warning">Administrative functions must be validated on backend.</string>
+</resources>
