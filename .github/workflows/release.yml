@@ -1,0 +1,244 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      is_prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  GRADLE_OPTS: "-Xmx2048m -Dfile.encoding=UTF-8"
+  JAVA_VERSION: "17"
+  ANDROID_SDK_VERSION: "34"
+  ANDROID_NDK_VERSION: "26.1.10909125"
+  CMAKE_VERSION: "3.22.1"
+
+jobs:
+  # ============================================================
+  # VALIDATE & BUILD RELEASE
+  # ============================================================
+  build-and-validate:
+    name: Build & Validate Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_SDK_VERSION }}
+          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          cmake-version: ${{ env.CMAKE_VERSION }}
+          cache-key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_VERSION }}
+
+      - name: Setup Signing Key
+        if: env.RELEASE_STORE_FILE != ''
+        run: |
+          echo "${{ secrets.RELEASE_STORE_FILE }}" | base64 -d > keystore.jks
+          echo "✅ Keystore created"
+        env:
+          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+
+      - name: Extract Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update Version in Build Config
+        run: |
+          sed -i "s/versionName \".*\"/versionName \"${{ steps.version.outputs.version }}\"/" build.gradle
+          sed -i "s/versionCode .*/versionCode $(date +%s)/" build.gradle
+          echo "✅ Version updated to ${{ steps.version.outputs.version }}"
+
+      - name: Run All Tests
+        run: ./gradlew test lint --stacktrace --continue
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Verify Release APK
+        run: |
+          APK_PATH=$(find . -name "*.apk" -path "*/release/*" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No release APK found!"
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "✅ Release APK: $APK_PATH"
+          ls -lh "$APK_PATH"
+          apksigner verify --print-certs "$APK_PATH"
+
+      - name: Generate Checksums
+        id: checksums
+        run: |
+          APK_PATH="${{ steps.verify.outputs.APK_PATH }}"
+          SHA256=$(sha256sum "$APK_PATH" | cut -d' ' -f1)
+          SHA512=$(sha512sum "$APK_PATH" | cut -d' ' -f1)
+          MD5=$(md5sum "$APK_PATH" | cut -d' ' -f1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "sha512=$SHA512" >> $GITHUB_OUTPUT
+          echo "md5=$MD5" >> $GITHUB_OUTPUT
+          echo "✅ Checksums generated"
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-${{ steps.version.outputs.version }}
+          path: ${{ steps.verify.outputs.APK_PATH }}
+          retention-days: 90
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          
+          cat <<EOF > release_notes.md
+          # ReaBuzz Admin v${VERSION}
+          
+          ## 📱 Android Application Release
+          
+          **Release Date**: $(date -u +"%Y-%m-%d %H:%M UTC")
+          **Version**: ${VERSION}
+          **Tag**: ${TAG}
+          **Commit**: ${GITHUB_SHA::8}
+          
+          ## ✨ Features
+          - Modern Android app with Kotlin + Jetpack Compose
+          - Role-based admin dashboard (ADMIN/MODERATOR/USER)
+          - Secure authentication with JWT + EncryptedSharedPreferences
+          - Audit logging for all administrative actions
+          - Material3 theming with dark mode support
+          - Certificate pinning for network security
+          
+          ## 🔐 Security
+          - Server-side authorization (no local flags)
+          - Encrypted token storage
+          - Certificate pinning configured
+          - ProGuard/R8 obfuscation enabled
+          - No backup/debug flags in release
+          
+          ## 📦 Download
+          - **APK**: \`ReaBuzz-Admin-v${VERSION}.apk\`
+          - **SHA256**: \`${{ steps.checksums.outputs.sha256 }}\`
+          
+          ## 📋 Verification
+          \`\`\`bash
+          # Verify APK signature
+          apksigner verify --print-certs ReaBuzz-Admin-v${VERSION}.apk
+          
+          # Verify checksum
+          sha256sum -c <<< "${{ steps.checksums.outputs.sha256 }}  ReaBuzz-Admin-v${VERSION}.apk"
+          \`\`\`
+          
+          ## 🛠️ Build Info
+          - **Gradle**: 8.4
+          - **Kotlin**: 1.9+
+          - **Android SDK**: 34
+          - **Min SDK**: 21 (Android 5.0)
+          - **Target SDK**: 34 (Android 14)
+          - **Arch**: arm64-v8a, armeabi-v7a
+          
+          ---
+          *Built from commit ${GITHUB_SHA} on GitHub Actions*
+          EOF
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.is_prerelease == 'false'
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ReaBuzz Admin v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          files: ${{ steps.verify.outputs.APK_PATH }}
+          draft: false
+          prerelease: ${{ github.event.inputs.is_prerelease || 'false' }}
+          generate_release_notes: false
+
+      - name: Create Pre-release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.is_prerelease == 'true'
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ReaBuzz Admin v${{ steps.version.outputs.version }} (Pre-release)
+          body_path: release_notes.md
+          files: ${{ steps.verify.outputs.APK_PATH }}
+          draft: false
+          prerelease: true
+          generate_release_notes: false
+
+  # ============================================================
+  # PUBLISH TO GOOGLE PLAY (optional)
+  # ============================================================
+  publish-play-store:
+    name: Publish to Google Play
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build-and-validate
+    if: github.event_name == 'push' && github.ref == 'refs/tags/v*'
+    steps:
+      - name: Download Release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: release-apk-${{ needs.build-and-validate.outputs.version }}
+          path: ./apk
+
+      - name: Publish to Play Store Internal Testing
+        uses: r0adkll/upload-google-play@v1
+        if: env.PLAY_SERVICE_ACCOUNT_JSON != ''
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.reabuzz.newapp
+          releaseFiles: ./apk/*.apk
+          track: internal
+          status: draft
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+      - name: Notify Success
+        run: |
+          echo "✅ Release ${{ needs.build-and-validate.outputs.version }} published to Play Store Internal Testing"
