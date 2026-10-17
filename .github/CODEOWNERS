@@ -1,0 +1,27 @@
+# Code Owners for ReaBuzz Admin
+
+# Global owners (required for all PRs)
+* @reabuzz-team/lead-developers
+
+# Android specific
+/src/main/java/ @reabuzz-team/android-team
+/src/main/res/ @reabuzz-team/android-team
+/src/main/AndroidManifest.xml @reabuzz-team/android-team
+
+# Build configuration
+/build.gradle @reabuzz-team/android-team @reabuzz-team/devops
+/settings.gradle @reabuzz-team/devops
+/gradle.properties @reabuzz-team/devops
+/gradle/ @reabuzz-team/devops
+
+# CI/CD
+/.github/workflows/ @reabuzz-team/devops
+/.github/dependabot.yml @reabuzz-team/devops
+
+# Documentation
+/README.md @reabuzz-team/docs
+/docs/ @reabuzz-team/docs
+
+# Security
+/.github/CODEOWNERS @reabuzz-team/security
+/.github/dependabot.yml @reabuzz-team/security
