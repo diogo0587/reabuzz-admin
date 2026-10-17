@@ -1,0 +1,60 @@
+# Dependabot Configuration for ReaBuzz Admin
+
+version: 2
+updates:
+  # Gradle dependencies
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "gradle"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      android-gradle-plugin:
+        patterns:
+          - "com.android.tools.build*"
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+      androidx:
+        patterns:
+          - "androidx.*"
+      material:
+        patterns:
+          - "com.google.android.material*"
+      testing:
+        patterns:
+          - "junit*"
+          - "androidx.test*"
+          - "androidx.espresso*"
+      gradle-plugins:
+        patterns:
+          - "*gradle*"
+    ignore:
+      # Ignore major version updates for stability
+      - dependency-name: "com.android.tools.build:gradle"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin:kotlin-gradle-plugin"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Sao_Paulo"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
