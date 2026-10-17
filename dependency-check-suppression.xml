@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-check-suppression.1.3.xsd">
+    <!-- 
+        Suppression rules for false positives or accepted risks.
+        Format: CVE ID or sonatype OSS index ID
+    -->
+    
+    <!-- Example: Suppress known false positive in Android Gradle Plugin -->
+    <!--
+    <suppress>
+        <notes>False positive in AGP - no actual vulnerability</notes>
+        <packageUrl>pkg:maven/com.android.tools.build/gradle@8.4.0</packageUrl>
+        <cve>CVE-2023-XXXX</cve>
+    </suppress>
+    -->
+    
+    <!-- Suppress for test dependencies only -->
+    <!--
+    <suppress>
+        <notes>Test scope only - not in production APK</notes>
+        <packageUrl>pkg:maven/org.junit/junit@4.13.2</packageUrl>
+    </suppress>
+    -->
+</suppressions>
