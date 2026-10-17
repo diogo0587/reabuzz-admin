@@ -1,0 +1,71 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement
+title: "[FEATURE] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe it below.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this solve? What's the use case?
+      placeholder: As an admin, I want to... so that...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should this work?
+      placeholder: Add a new "Export Audit Log" button that generates a CSV...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any other approaches you've thought of?
+      placeholder: Could also use PDF export instead...
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low (nice to have)
+        - Medium (important)
+        - High (critical for workflow)
+        - Urgent (blocking release)
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Admin Dashboard
+        - Authentication
+        - Navigation
+        - UI/UX
+        - Security
+        - Performance
+        - Testing
+        - Documentation
+        - Build/CI
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have checked for duplicate requests
+          required: true
+        - label: This aligns with project goals
+          required: true
+        - label: I'm willing to implement this (or help test)
+          required: false
