@@ -1,0 +1,8 @@
+<resources>
+    <dimen name="padding_standard">8dp</dimen>
+    <dimen name="padding_large">16dp</dimen>
+    <dimen name="spacing_small">4dp</dimen>
+    <dimen name="spacing_medium">8dp</dimen>
+    <dimen name="spacing_large">16dp</dimen>
+    <dimen name="card_elevation">4dp</dimen>
+</resources>
