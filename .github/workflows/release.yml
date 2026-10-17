@@ -188,7 +188,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.is_prerelease == 'false'
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -200,7 +200,7 @@ jobs:
           generate_release_notes: false
 
       - name: Create Pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.is_prerelease == 'true'
         with:
           tag_name: ${{ steps.version.outputs.tag }}
