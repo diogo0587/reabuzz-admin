@@ -1,0 +1,62 @@
+name: 🔒 Security Report
+description: Report a security vulnerability (private)
+title: "[SECURITY] "
+labels: ["security", "confidential"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **IMPORTANT**: For critical security vulnerabilities, please email security@reabuzz.app directly instead of using this form.
+  - type: textarea
+    id: severity
+    attributes:
+      label: Severity Assessment
+      description: CVSS score or qualitative assessment (Critical/High/Medium/Low)
+      placeholder: "High - CVSS 7.5"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Vulnerability Description
+      description: Detailed description of the vulnerability
+      placeholder: |
+        The admin dashboard allows role escalation via...
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What can an attacker achieve?
+      placeholder: Full admin access without authentication...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: Steps to reproduce (if safe to share)
+      placeholder: |
+        1. Login as regular user
+        2. Manipulate local storage...
+        3. Gain admin access
+    validations:
+      required: true
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Mitigation
+      description: How should this be fixed?
+      placeholder: Add server-side validation for role changes...
+    validations:
+      required: false
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Responsible Disclosure
+      options:
+        - label: I agree to responsible disclosure (90 days before public)
+          required: true
+        - label: I am the discoverer of this vulnerability
+          required: false
