@@ -18,6 +18,7 @@ class AdminViewModel(navController: NavController) : ViewModel() {
     // Sample test users
     private val testUsers = listOf(
         User(1, "admin_user", "ADMIN"),
+        User(4, "admin_vip", "ADMIN_VIP"),
         User(2, "moderator_1", "MODERATOR"),
         User(3, "regular_user", "USER")
     )
@@ -30,7 +31,10 @@ class AdminViewModel(navController: NavController) : ViewModel() {
         get() = currentUser != null
 
     val isAdmin: Boolean
-        get() = currentUser?.role == "ADMIN"
+        get() = currentUser?.role == "ADMIN" || currentUser?.role == "ADMIN_VIP"
+
+    val isVipAdmin: Boolean
+        get() = currentUser?.role == "ADMIN_VIP"
 
     // Login with test credentials
     fun login(username: String, password: String?) {
@@ -53,7 +57,7 @@ class AdminViewModel(navController: NavController) : ViewModel() {
 
     // Admin-only operations
     fun assignRole(userId: Int, newRole: String) {
-        if (currentUser?.role != "ADMIN") {
+        if (currentUser?.role != "ADMIN" && currentUser?.role != "ADMIN_VIP") {
             Log.w("AdminViewModel", "Non-admin attempted role assignment")
             return
         }
@@ -68,8 +72,9 @@ class AdminViewModel(navController: NavController) : ViewModel() {
 
     // Audit logging
     fun logAdminAction(action: String, details: String?) {
-        if (currentUser?.role == "ADMIN") {
-            Log.i("AdminAudit", "ADMIN [${currentUser.username}]: $action - $details")
+        if (currentUser?.role == "ADMIN" || currentUser?.role == "ADMIN_VIP") {
+            val roleTag = if (currentUser?.role == "ADMIN_VIP") "ADMIN_VIP" else "ADMIN"
+            Log.i("AdminAudit", "$roleTag [${currentUser.username}]: $action - $details")
         }
     }
 
