@@ -1,0 +1,101 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior
+title: "[BUG] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the form below.
+  - type: input
+    id: version
+    attributes:
+      label: App Version
+      description: Which version are you using? (e.g., 1.0.0)
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: build-type
+    attributes:
+      label: Build Type
+      options:
+        - Debug
+        - Release
+        - Play Store
+        - Sideloaded
+    validations:
+      required: true
+  - type: dropdown
+    id: android-version
+    attributes:
+      label: Android Version
+      options:
+        - "5.0 (API 21)"
+        - "6.0 (API 23)"
+        - "7.0 (API 24)"
+        - "8.0 (API 26)"
+        - "9.0 (API 28)"
+        - "10.0 (API 29)"
+        - "11.0 (API 30)"
+        - "12.0 (API 31)"
+        - "13.0 (API 33)"
+        - "14.0 (API 34)"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device Model
+      description: e.g., Pixel 7 Pro, Samsung Galaxy S23, Emulator
+      placeholder: "Pixel 7 Pro"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Clear steps to reproduce the bug
+      placeholder: |
+        1. Open app
+        2. Navigate to Admin Dashboard
+        3. Click "Assign Role"
+        4. Observe crash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+      placeholder: Role assignment dialog should open
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+      placeholder: App crashes with NullPointerException
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Stack Traces
+      description: Paste relevant logs (use code blocks)
+      render: log
+      placeholder: |
+        E/AndroidRuntime: FATAL EXCEPTION: main
+        java.lang.NullPointerException: ...
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched for existing issues
+          required: true
+        - label: I can reproduce this consistently
+          required: false
+        - label: This is a security issue (if yes, mark as confidential)
+          required: false
