@@ -315,7 +315,7 @@ jobs:
           path: reports/*.html
 
       - name: Secret Scanning (GitLeaks)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         with:
           args: --verbose --no-banner
 
