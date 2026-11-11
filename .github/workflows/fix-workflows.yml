@@ -8,9 +8,9 @@ permissions:
 
 jobs:
   fix:
-    name: Auto-fix GitHub Actions workflows
+    name: Bump setup-android to v4
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,75 +24,18 @@ jobs:
           mv actionlint /usr/local/bin/actionlint
           actionlint --version
 
-      - name: Backup original workflows
+      - name: Backup workflows
         run: |
           mkdir -p /tmp/wf-backup
           cp -r .github/workflows/* /tmp/wf-backup/ || true
           echo "Backup saved to /tmp/wf-backup"
 
-      - name: Fix setup-android v3 -> v4
+      - name: Bump setup-android v3 -> v4
         run: |
           shopt -s nullglob
           for f in .github/workflows/*.yml .github/workflows/*.yaml; do
             sed -i 's#android-actions/setup-android@v3#android-actions/setup-android@v4#g' "$f"
             echo "Patched setup-android in $f"
-          done
-
-      - name: Fix secrets-in-if warnings
-        run: |
-          shopt -s nullglob
-          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-            python3 -c "
-          import re, sys, pathlib
-          p = pathlib.Path(sys.argv[1])
-          text = p.read_text()
-          orig = text
-          pattern = re.compile(
-              r'(?P<indent>[ ]{6})- name: (?P<name>[^\n]+)\n'
-              r'(?P=indent)  if: \\\$\\{\\{ secrets\\.(?P<sec>[A-Z0-9_]+) != .. \\}\\}\n'
-              r'(?P=indent)  env:\n'
-              r'(?P=indent)    (?P=sec): \\\$\\{\\{ secrets\\.(?P=sec) \\}\\}\n'
-              r'(?P=indent)  run: \\|\n'
-              r'(?P<body>(?:(?P=indent)    [^\n]*\n)+)',
-              re.MULTILINE,
-          )
-          def repl(m):
-              indent = m.group('indent')
-              name = m.group('name')
-              sec = m.group('sec')
-              body = m.group('body')
-              new_body = (
-                  f'{indent}    if [ -z \"\${{{sec}:-}}\" ]; then\n'
-                  f'{indent}      echo \"{sec} not set, skipping {name}\"\n'
-                  f'{indent}      exit 0\n'
-                  f'{indent}    fi\n'
-                  + body
-              )
-              return (
-                  f'{indent}- name: {name}\n'
-                  f'{indent}  env:\n'
-                  f'{indent}    {sec}: \${{{{ secrets.{sec} }}}}\n'
-                  f'{indent}  run: |\n'
-                  f'{new_body}'
-              )
-          new = pattern.sub(repl, text)
-          if new != orig:
-              p.write_text(new)
-              print(f'Fixed secrets-in-if in {p}')
-          else:
-              print(f'No secrets-in-if pattern in {p}')
-          " "$f"
-          done
-
-      - name: Quote GITHUB_OUTPUT / GITHUB_PATH redirects
-        run: |
-          shopt -s nullglob
-          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-            sed -i -E 's#>> \$GITHUB_OUTPUT#>> "$GITHUB_OUTPUT"#g' "$f"
-            sed -i -E 's#>> \$GITHUB_PATH#>> "$GITHUB_PATH"#g' "$f"
-            sed -i -E 's#>> \$GITHUB_STEP_SUMMARY#>> "$GITHUB_STEP_SUMMARY"#g' "$f"
-            sed -i -E 's#>> \$GITHUB_ENV#>> "$GITHUB_ENV"#g' "$f"
-            echo "Quoted redirects in $f"
           done
 
       - name: Validate with actionlint
@@ -125,6 +68,6 @@ jobs:
           fi
 
           git add .github/workflows/
-          git commit -m "ci: auto-fix workflow issues"
+          git commit -m "ci: bump setup-android v3 -> v4 (fix sdkmanager 'tools' error)"
           git push
           echo "Changes pushed"
