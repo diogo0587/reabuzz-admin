@@ -126,8 +126,6 @@ jobs:
           api-level: ${{ env.ANDROID_SDK_VERSION }}
           ndk-version: ${{ env.ANDROID_NDK_VERSION }}
           cmake-version: ${{ env.CMAKE_VERSION }}
-          emulator: true
-          arch: arm64
           cache-key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_VERSION }}
 
       - name: Create and Start Emulator
@@ -192,7 +190,6 @@ jobs:
           fi
           echo "✅ Debug APK found at: $APK_PATH"
           ls -lh "$APK_PATH"
-          # Verify APK structure
           unzip -l "$APK_PATH" | head -20
 
       - name: Upload Debug APK
@@ -237,20 +234,20 @@ jobs:
           cache-key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_VERSION }}
 
       - name: Setup Signing Key
-        if: env.RELEASE_STORE_FILE != ''
-        run: |
-          echo "${{ secrets.RELEASE_STORE_FILE }}" | base64 -d > keystore.jks
-          echo "keystore.jks created"
+        if: ${{ secrets.RELEASE_STORE_FILE != '' }}
         env:
           RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+        run: |
+          echo "$RELEASE_STORE_FILE" | base64 -d > keystore.jks
+          echo "keystore.jks created"
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
         env:
-          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+          RELEASE_STORE_FILE: keystore.jks
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Verify Release APK
         run: |
@@ -261,7 +258,6 @@ jobs:
           fi
           echo "✅ Release APK found at: $APK_PATH"
           ls -lh "$APK_PATH"
-          # Verify signing
           apksigner verify --print-certs "$APK_PATH"
 
       - name: Upload Release APK
@@ -330,30 +326,34 @@ jobs:
     if: always()
     steps:
       - name: Check Job Statuses
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
-          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          # Check each needed job
+          {
+            echo "## CI Pipeline Summary"
+            echo ""
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
           for job in lint unit-tests instrumented-tests build-debug build-release security-scan; do
-            status="${{ needs.$job.result }}"
-            if [ "$status" == "success" ]; then
-              echo "| $job | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-            elif [ "$status" == "failure" ]; then
-              echo "| $job | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-            elif [ "$status" == "skipped" ]; then
-              echo "| $job | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "| $job | ❓ $status |" >> $GITHUB_STEP_SUMMARY
-            fi
+            status=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "unknown"')
+            case "$status" in
+              success)   icon="✅ Success" ;;
+              failure)   icon="❌ Failed" ;;
+              cancelled) icon="🚫 Cancelled" ;;
+              skipped)   icon="⏭️ Skipped" ;;
+              *)         icon="❓ $status" ;;
+            esac
+            echo "| $job | $icon |" >> "$GITHUB_STEP_SUMMARY"
           done
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "Branch: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+          {
+            echo ""
+            echo "Commit: ${{ github.sha }}"
+            echo "Branch: ${{ github.ref }}"
+            echo "Actor: ${{ github.actor }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if any required job failed
         if: contains(needs.*.result, 'failure')
