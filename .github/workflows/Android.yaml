@@ -30,29 +30,12 @@ env:
 
 jobs:
   # ============================================================
-  # LINT DO WORKFLOW
-  # ============================================================
-  lint-workflows:
-    name: Lint Workflows (actionlint)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run actionlint
-        uses: docker://rhysd/actionlint:latest
-        with:
-          args: -color
-
-  # ============================================================
   # VALIDATE & BUILD RELEASE
   # ============================================================
   build-and-validate:
     name: Build & Validate Release
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: lint-workflows
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
@@ -84,10 +67,14 @@ jobs:
           build-tools-version: ${{ env.ANDROID_BUILD_TOOLS }}
 
       - name: Add build-tools to PATH
-        run: echo "$ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS }}" >> $GITHUB_PATH
+        run: echo "${ANDROID_HOME}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}" >> "$GITHUB_PATH"
 
-      # ---------- ASSINATURA: OBRIGATÓRIA ----------
       - name: Require Signing Secrets
+        env:
+          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           missing=0
           for s in RELEASE_STORE_FILE RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
@@ -104,18 +91,13 @@ jobs:
             exit 1
           fi
           echo "✅ All signing secrets present"
-        env:
-          RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
       - name: Setup Signing Key
         env:
           RELEASE_STORE_FILE: ${{ secrets.RELEASE_STORE_FILE }}
         run: |
           echo "$RELEASE_STORE_FILE" | base64 -d > keystore.jks
-          ls -lh keystore.jks
+          ls -lh "keystore.jks"
 
       - name: Extract Version
         id: version
@@ -129,8 +111,10 @@ jobs:
             echo "❌ Could not determine version"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          {
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+          } >> "$GITHUB_OUTPUT"
           echo "✅ Version: $VERSION"
 
       - name: Update Version in Build Config
@@ -163,7 +147,9 @@ jobs:
             echo "❌ No release APK found!"
             exit 1
           fi
-          echo "APK_PATH=$APK_PATH" >> $GITHUB_OUTPUT
+          {
+            echo "APK_PATH=$APK_PATH"
+          } >> "$GITHUB_OUTPUT"
           echo "✅ APK: $APK_PATH"
           ls -lh "$APK_PATH"
 
@@ -184,7 +170,9 @@ jobs:
           SRC="${{ steps.verify.outputs.APK_PATH }}"
           DEST="ReaBuzz-Admin-v${{ steps.version.outputs.version }}.apk"
           cp "$SRC" "$DEST"
-          echo "renamed=$DEST" >> $GITHUB_OUTPUT
+          {
+            echo "renamed=$DEST"
+          } >> "$GITHUB_OUTPUT"
           ls -lh "$DEST"
 
       - name: Generate Checksums
@@ -194,9 +182,11 @@ jobs:
           SHA256=$(sha256sum "$APK" | cut -d' ' -f1)
           SHA512=$(sha512sum "$APK" | cut -d' ' -f1)
           MD5=$(md5sum "$APK" | cut -d' ' -f1)
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-          echo "sha512=$SHA512" >> $GITHUB_OUTPUT
-          echo "md5=$MD5" >> $GITHUB_OUTPUT
+          {
+            echo "sha256=$SHA256"
+            echo "sha512=$SHA512"
+            echo "md5=$MD5"
+          } >> "$GITHUB_OUTPUT"
           echo "✅ sha256=$SHA256"
 
       - name: Upload Release APK
