@@ -122,7 +122,7 @@ jobs:
           echo "✅ Checksums generated"
 
       - name: Upload Release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-apk-${{ steps.version.outputs.version }}
           path: ${{ steps.verify.outputs.APK_PATH }}
