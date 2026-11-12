@@ -16,6 +16,7 @@ reverse-engineering analysis of a PolyBuzz APK. Reference APKs belong to the
 ./gradlew assembleRelease        # unsigned release APK, no debug code
 ./gradlew testDebugUnitTest      # 22 JVM unit tests, no device required
 ./gradlew assembleDebugAndroidTest   # compiles the instrumentation tests
+./gradlew lintDebug                   # Android lint
 ```
 
 The container is ephemeral: `apt` packages (the JDK) vanish on restart while
@@ -24,9 +25,30 @@ The container is ephemeral: `apt` packages (the JDK) vanish on restart while
 point at the SDK.
 
 Release signing reads `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`,
-`RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` from the environment; the release
-config is skipped when `RELEASE_STORE_FILE` is unset. Never commit keystores or
+`RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` from the environment. When
+`RELEASE_STORE_FILE` is unset the release config falls back to the debug
+keystore, so `assembleRelease` still yields an APK that `adb install` accepts —
+an unsigned one is rejected. CI overrides this with real secrets, and
+`release.yml` refuses to publish a debug-signed build. Never commit keystores or
 those values.
+
+## CI
+
+Two workflows, both validated with `actionlint`:
+
+- `ci.yml` — on push/PR to `main`/`develop`. Job `verify` builds, runs the unit
+  tests and lint; job `apk` re-builds and uploads the debug APK, first asserting
+  with `apksigner verify` and `aapt2 dump badging` that it is signed and has a
+  launchable activity.
+- `release.yml` — on `v*` tags or manual dispatch. Requires the four signing
+  secrets, builds the signed release, refuses a debug-signed result, and
+  publishes a GitHub Release with a SHA-256 file.
+
+`android-actions/setup-android` only installs cmdline-tools, so each job runs
+`sdkmanager` explicitly for `android-34` and `build-tools;34.0.0`; without
+build-tools `apksigner` and `aapt2` are absent. The container here is
+x86_64 with no KVM, so `connectedAndroidTest` is not part of CI — the Compose
+instrumentation tests are compiled but not executed.
 
 ## Reverse engineering an APK with REA
 
