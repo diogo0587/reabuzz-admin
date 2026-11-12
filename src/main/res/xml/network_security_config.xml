@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- Cleartext stays off for the production API domain. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.reabuzz.app</domain>
-        <pin-set expiration="2027-01-01">
-            <!-- Primary pin - replace with actual SHA-256 of cert -->
-            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
-            <!-- Backup pin -->
-            <pin digest="SHA-256">BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=</pin>
-        </pin-set>
     </domain-config>
-    
+
+    <!--
+      Certificate pinning is deliberately not configured: the previous placeholder
+      pins (AAAA.../BBBB...) were invalid and would have broken every connection.
+      Add real pins once the production certificate is known.
+    -->
+
     <debug-overrides>
         <trust-anchors>
             <certificates src="user" />

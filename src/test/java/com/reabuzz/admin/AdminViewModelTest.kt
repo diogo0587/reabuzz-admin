@@ -1,105 +1,74 @@
 package com.reabuzz.admin
 
-import org.junit.Assert.*
-import org.junit.Before
+import com.reabuzz.admin.audit.InMemoryAuditLog
+import com.reabuzz.admin.audit.Outcome
+import com.reabuzz.admin.auth.DemoAuthorizationService
+import com.reabuzz.admin.model.Permission
+import com.reabuzz.admin.model.Role
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.mockito.Mockito.mock
 
 class AdminViewModelTest {
 
-    private lateinit var viewModel: AdminViewModel
-    private lateinit var mockNavController: androidx.navigation.NavController
+    private val log = InMemoryAuditLog()
+    private val viewModel = AdminViewModel(
+        auth = DemoAuthorizationService(ownerUsername = "owner", debugToolsEnabled = false),
+        auditLog = log,
+    )
 
-    @Before
-    fun setUp() {
-        mockNavController = mock(androidx.navigation.NavController::class.java)
-        viewModel = AdminViewModel(mockNavController)
+    @Test
+    fun `starts signed out and denies everything`() {
+        assertFalse(viewModel.isAuthenticated)
+        assertFalse(viewModel.can(Permission.VIEW_ADMIN_PANEL))
     }
 
     @Test
-    fun `initial state - not authenticated`() {
-        assertFalse("Should not be authenticated initially", viewModel.isAuthenticated)
-        assertFalse("Should not be admin initially", viewModel.isAdmin)
-        assertNull("Current user should be null", viewModel.currentUser)
-    }
-
-    @Test
-    fun `login with valid admin credentials`() {
-        viewModel.login("admin_user", "any")
-        
-        assertTrue("Should be authenticated after valid login", viewModel.isAuthenticated)
-        assertTrue("Should be admin", viewModel.isAdmin)
-        assertEquals("admin_user", viewModel.currentUser?.username)
-        assertEquals("ADMIN", viewModel.currentUser?.role)
-    }
-
-    @Test
-    fun `login with valid moderator credentials`() {
-        viewModel.login("moderator_1", "any")
-        
-        assertTrue("Should be authenticated", viewModel.isAuthenticated)
-        assertFalse("Should NOT be admin", viewModel.isAdmin)
-        assertEquals("MODERATOR", viewModel.currentUser?.role)
-    }
-
-    @Test
-    fun `login with valid user credentials`() {
-        viewModel.login("regular_user", "any")
-        
-        assertTrue("Should be authenticated", viewModel.isAuthenticated)
-        assertFalse("Should NOT be admin", viewModel.isAdmin)
-        assertEquals("USER", viewModel.currentUser?.role)
-    }
-
-    @Test
-    fun `login with invalid credentials`() {
-        viewModel.login("nonexistent", "any")
-        
-        assertFalse("Should not be authenticated", viewModel.isAuthenticated)
-        assertNull("Current user should be null", viewModel.currentUser)
-    }
-
-    @Test
-    fun `logout clears authentication`() {
-        viewModel.login("admin_user", "any")
+    fun `owner signs in and reaches the admin panel`() {
+        viewModel.login("owner", "changeme")
         assertTrue(viewModel.isAuthenticated)
-        
+        assertEquals("owner", viewModel.account?.username)
+        assertTrue(viewModel.can(Permission.VIEW_ADMIN_PANEL))
+        assertTrue(viewModel.can(Permission.VIP_PANEL))
+    }
+
+    @Test
+    fun `bad credentials leave the session signed out`() {
+        viewModel.login("owner", "nope")
+        assertFalse(viewModel.isAuthenticated)
+        assertTrue(viewModel.loginState is AdminViewModel.LoginState.Failed)
+    }
+
+    @Test
+    fun `logout clears the account`() {
+        viewModel.login("owner", "changeme")
         viewModel.logout()
-        
-        assertFalse("Should not be authenticated after logout", viewModel.isAuthenticated)
-        assertNull("Current user should be null", viewModel.currentUser)
+        assertFalse(viewModel.isAuthenticated)
+        assertFalse(viewModel.can(Permission.VIEW_ADMIN_PANEL))
     }
 
     @Test
-    fun `assign role requires admin`() {
-        // Login as regular user
-        viewModel.login("regular_user", "any")
-        assertFalse(viewModel.isAdmin)
-        
-        // Attempt to assign role (should be ignored)
-        viewModel.assignRole(999, "ADMIN")
-        
-        // No exception, just silently ignored
-        // In real app, would verify backend not called
+    fun `authorised role assignment is recorded as success`() {
+        viewModel.login("owner", "changeme")
+        assertTrue(viewModel.assignRole(targetUserId = 42L, newRole = Role.VIP))
+        val entry = log.entries().single()
+        assertEquals("ASSIGN_ROLE", entry.action)
+        assertEquals(Outcome.SUCCESS, entry.outcome)
     }
 
     @Test
-    fun `admin can assign role`() {
-        viewModel.login("admin_user", "any")
-        assertTrue(viewModel.isAdmin)
-        
-        // Assign role (in real app would call API)
-        viewModel.assignRole(2, "ADMIN")
-        
-        // Verify audit log would be called
-        // This is a behavioral test - actual implementation calls logAdminAction
+    fun `unauthorised role assignment is refused and audited`() {
+        viewModel.login("regular_user", "changeme")
+        assertFalse(viewModel.assignRole(targetUserId = 42L, newRole = Role.ADMIN))
+        val entry = log.entries().single()
+        assertEquals(Outcome.DENIED, entry.outcome)
+        assertEquals("regular_user", entry.actorUsername)
     }
 
     @Test
-    fun `audit logging for admin actions`() {
-        viewModel.login("admin_user", "any")
-        
-        // Should not throw
-        viewModel.logAdminAction("TEST_ACTION", "test details")
+    fun `debug tools stay off in a release-shaped policy`() {
+        viewModel.login("owner", "changeme")
+        assertFalse(viewModel.can(Permission.DEBUG_TOOLS))
     }
 }

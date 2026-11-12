@@ -1,76 +1,91 @@
 package com.reabuzz.admin
 
 import android.os.Bundle
-import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.viewModelStoreOwner
-import androidx.navigation.NavController
-import androidx.navigation.NavDestination
-import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.AppBarConfiguration
-import androidx.navigation.ui.setupActionBarWithNavController
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.Button
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Card
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import com.google.acl.material3.bottomnavigation.BottomNavigationBar
-import com.google.acl.material3.bottomnavigation.BottomNavigationView
+import com.reabuzz.admin.model.Permission
+import com.reabuzz.admin.ui.AdminDashboardScreen
+import com.reabuzz.admin.ui.HomeScreen
+import com.reabuzz.admin.ui.LoginScreen
+import com.reabuzz.admin.ui.ProfileScreen
+import com.reabuzz.admin.ui.ReabuzzTheme
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
-    private lateinit var navController: NavController
-    private var adminLoggedIn = false
+    private val viewModel: AdminViewModel by viewModels {
+        AdminViewModelFactory(application as ReabuzzApplication)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Set content view - will be replaced by Compose
         setContent {
             ReabuzzTheme {
-                // Main UI setup
-                val controller = rememberNavController()
-                
-                // Bottom navigation
-                val backStackEntry by rememberNavBackStackEntry(navController, destinationId = R.id.nav_home)
-                val viewModel by viewModel { AdminViewModel(controller) }
-                
-                Scaffold(
-                    bottomBar = {
-                        BottomNavigationView(
-                            items = bottomNavigationMenu(),
-                            { item ->
-                                navController.navigate(item.itemId) {
-                                    popUpTo(navController.graph.startDestination) { inclusive true }
-                                }
-                            }
-                        )
-                    }
-                ) {
-                    ContainerScreen(viewModel)
-                }
+                AppRoot(viewModel)
             }
         }
-        
-        // Initialize navigation
-        navController = findNavController(R.id.nav_host_fragment)
-        setupActionBarWithNavController(navController)
-        
-        // Check if admin already logged in (for demo with test credentials)
-        adminLoggedIn = intent.getBooleanExtra("admin_logged_in", false)
-        
-        if (adminLoggedIn) {
-            // Navigate to admin dashboard
-            navController.navigate(R.id.nav_admin_dashboard)
+    }
+}
+
+private enum class Tab(val label: String) { Home("Home"), Profile("Profile"), Admin("Admin") }
+
+@Composable
+private fun AppRoot(viewModel: AdminViewModel) {
+    var tab by remember { mutableStateOf(Tab.Home) }
+
+    if (!viewModel.isAuthenticated) {
+        LoginScreen(viewModel) { tab = Tab.Home }
+        return
+    }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                Tab.entries.forEach { entry ->
+                    if (entry == Tab.Admin && !viewModel.can(Permission.VIEW_ADMIN_PANEL)) return@forEach
+                    NavigationBarItem(
+                        selected = tab == entry,
+                        onClick = { tab = entry },
+                        icon = {
+                            Icon(
+                                when (entry) {
+                                    Tab.Home -> Icons.Filled.Home
+                                    Tab.Profile -> Icons.Filled.Person
+                                    Tab.Admin -> Icons.Filled.AdminPanelSettings
+                                },
+                                contentDescription = entry.label,
+                            )
+                        },
+                        label = { Text(entry.label) },
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            when (tab) {
+                Tab.Home -> HomeScreen(viewModel)
+                Tab.Profile -> ProfileScreen(viewModel)
+                Tab.Admin -> AdminDashboardScreen(viewModel, viewModel.auditEntries())
+            }
         }
     }
 }

@@ -1,28 +1,28 @@
 package com.reabuzz.admin
 
 import android.app.Application
-import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.work.WorkManager
+import com.reabuzz.admin.audit.InMemoryAuditLog
+import com.reabuzz.admin.auth.AuthorizationService
+import com.reabuzz.admin.auth.DemoAuthorizationService
 
-class ReabuzzApplication : Application() {
+open class ReabuzzApplication : Application() {
+
+    lateinit var auditLog: InMemoryAuditLog
+        private set
+
+    lateinit var authorizationService: AuthorizationService
+        private set
 
     override fun onCreate() {
         super.onCreate()
-        
-        // Initialize WorkManager
-        WorkManager.initialize(this, androidx.work.Configuration.Builder()
-            .setMinimumLoggingLevel(android.util.Log.DEBUG)
-            .build())
-        
-        // Lifecycle logging
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : 
-            androidx.lifecycle.DefaultLifecycleObserver {
-            override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
-                android.util.Log.d("Reabuzz", "App moved to foreground")
-            }
-            override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
-                android.util.Log.d("Reabuzz", "App moved to background")
-            }
-        })
+        auditLog = InMemoryAuditLog()
+        authorizationService = createAuthorizationService()
     }
+
+    /** Overridden by the debug variant; release always gets the demo service. */
+    protected open fun createAuthorizationService(): AuthorizationService =
+        DemoAuthorizationService(
+            ownerUsername = BuildConfig.OWNER_USERNAME,
+            debugToolsEnabled = BuildConfig.DEBUG_TOOLS_ENABLED,
+        )
 }

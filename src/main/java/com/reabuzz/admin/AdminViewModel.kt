@@ -1,91 +1,75 @@
 package com.reabuzz.admin
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import com.reabuzz.admin.databinding.ActivityMainBinding
-import android.content.Intent
+import com.reabuzz.admin.audit.AuditEntry
+import com.reabuzz.admin.audit.AuditLog
+import com.reabuzz.admin.audit.Outcome
+import com.reabuzz.admin.auth.AuthError
+import com.reabuzz.admin.auth.AuthorizationService
+import com.reabuzz.admin.model.Account
+import com.reabuzz.admin.model.Permission
+import com.reabuzz.admin.model.Role
 
-class AdminViewModel(navController: NavController) : ViewModel() {
+class AdminViewModel(
+    private val auth: AuthorizationService,
+    private val auditLog: AuditLog,
+) : ViewModel() {
 
-    // User data (test accounts)
-    data class User(
-        val id: Int,
-        val username: String,
-        val role: String,
-        val isActive: Boolean = true
-    )
+    sealed interface LoginState {
+        data object Idle : LoginState
+        data object Authenticated : LoginState
+        data class Failed(val error: AuthError) : LoginState
+    }
 
-    // Sample test users
-    private val testUsers = listOf(
-        User(1, "admin_user", "ADMIN"),
-        User(4, "admin_vip", "ADMIN_VIP"),
-        User(2, "moderator_1", "MODERATOR"),
-        User(3, "regular_user", "USER")
-    )
+    var account: Account? = null
+        private set
 
-    // Current logged-in user
-    private var currentUser: User? = null
+    var loginState: LoginState = LoginState.Idle
+        private set
 
-    // Authentication state
-    val isAuthenticated: Boolean
-        get() = currentUser != null
+    val isAuthenticated: Boolean get() = account != null
 
-    val isAdmin: Boolean
-        get() = currentUser?.role == "ADMIN" || currentUser?.role == "ADMIN_VIP"
-
-    val isVipAdmin: Boolean
-        get() = currentUser?.role == "ADMIN_VIP"
-
-    // Login with test credentials
-    fun login(username: String, password: String?) {
-        val user = testUsers.find { it.username == username }
-        if (user != null) {
-            currentUser = user
-            // In real app, would navigate based on role
-            Log.d("AdminViewModel", "User logged in: ${user.role}")
+    fun login(username: String, password: String) {
+        val result = auth.authenticate(username, password)
+        account = result.account
+        loginState = if (result.account != null) {
+            LoginState.Authenticated
         } else {
-            currentUser = null
-            Log.w("AdminViewModel", "Invalid credentials: $username")
+            LoginState.Failed(result.error ?: AuthError.INVALID_CREDENTIALS)
         }
     }
 
-    // Logout
     fun logout() {
-        currentUser = null
-        navController.popBackStack(navController.graph.startDestination, true)
+        account = null
+        loginState = LoginState.Idle
     }
 
-    // Admin-only operations
-    fun assignRole(userId: Int, newRole: String) {
-        if (currentUser?.role != "ADMIN" && currentUser?.role != "ADMIN_VIP") {
-            Log.w("AdminViewModel", "Non-admin attempted role assignment")
-            return
+    fun can(permission: Permission): Boolean = auth.can(account, permission)
+
+    fun auditEntries(): List<AuditEntry> = auditLog.entries().asReversed()
+
+    /** Returns false when the caller lacks the permission; the attempt is still audited. */
+    fun assignRole(targetUserId: Long, newRole: Role): Boolean {
+        val actor = account
+        if (!auth.can(actor, Permission.ASSIGN_ROLES)) {
+            actor?.let { record(it, "ASSIGN_ROLE", "$targetUserId -> $newRole", Outcome.DENIED) }
+            return false
         }
-        // Find and update user role
-        testUsers.forEach {
-            if (it.id == userId) {
-                it.role = newRole
-                Log.i("AdminViewModel", "Role assigned: user ${it.id} is now ${newRole}")
-            }
-        }
+        // The backend is the authority; this demo only records the intent.
+        actor?.let { record(it, "ASSIGN_ROLE", "$targetUserId -> $newRole", Outcome.SUCCESS) }
+        return true
     }
 
-    // Audit logging
-    fun logAdminAction(action: String, details: String?) {
-        if (currentUser?.role == "ADMIN" || currentUser?.role == "ADMIN_VIP") {
-            val roleTag = if (currentUser?.role == "ADMIN_VIP") "ADMIN_VIP" else "ADMIN"
-            Log.i("AdminAudit", "$roleTag [${currentUser.username}]: $action - $details")
-        }
-    }
-
-    // Factory for ViewModelProvider
-    fun factory(factory: ViewModelProvider.Factory): ViewModelProvider.Factory {
-        return object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(cls: Class<T>): T = 
-                if (cls.isAssignableFrom(AdminViewModel::class)) 
-                    AdminViewModel(navController) as T
-                else throw IllegalArgumentException("Unknown ViewModel class")
-        }
+    private fun record(actor: Account, action: String, details: String?, outcome: Outcome) {
+        auditLog.record(
+            AuditEntry(
+                timestampMs = System.currentTimeMillis(),
+                actorId = actor.id,
+                actorUsername = actor.username,
+                action = action,
+                details = details,
+                outcome = outcome,
+            )
+        )
     }
 }

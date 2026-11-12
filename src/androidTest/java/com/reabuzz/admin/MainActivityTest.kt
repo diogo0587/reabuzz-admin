@@ -1,45 +1,44 @@
 package com.reabuzz.admin
 
-import android.content.Context
-import androidx.test.core.app.ActivityScenario
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.*
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
 
+    @get:Rule
+    val composeRule = createAndroidComposeRule<MainActivity>()
+
     @Test
-    fun `main activity launches successfully`() {
-        val scenario = ActivityScenario.launch(MainActivity::class.java)
-        scenario.onActivity { activity ->
-            assertNotNull("Activity should not be null", activity)
-        }
+    fun launchesOnTheSignInScreen() {
+        composeRule.onNodeWithTag("login_username").assertIsDisplayed()
+        composeRule.onNodeWithTag("login_button").assertIsDisplayed()
     }
 
     @Test
-    fun `navigation to profile`() {
-        ActivityScenario.launch(MainActivity::class.java)
-        
-        // Click profile in bottom nav
-        onView(withId(R.id.nav_profile)).perform(click())
-        
-        // Verify navigation (would check for profile fragment)
-        // onView(withText("Profile")).check(matches(isDisplayed()))
+    fun rejectsUnknownCredentials() {
+        composeRule.onNodeWithTag("login_username").performTextInput("nobody")
+        composeRule.onNodeWithTag("login_password").performTextInput("wrong")
+        composeRule.onNodeWithTag("login_button").performClick()
+
+        // Still on the sign-in screen: the username field remains on screen.
+        composeRule.onNodeWithTag("login_username").assertIsDisplayed()
     }
 
     @Test
-    fun `navigation to admin dashboard`() {
-        ActivityScenario.launch(MainActivity::class.java)
-        
-        // Click admin in bottom nav
-        onView(withId(R.id.nav_admin)).perform(click())
-        
-        // Verify admin dashboard
-        // onView(withText("Admin Dashboard")).check(matches(isDisplayed()))
+    fun debugBuildSignsInWithTheDebugAccount() {
+        // src/debug replaces the application class, so this account exists here.
+        composeRule.onNodeWithTag("login_username").performTextInput("debug_admin")
+        composeRule.onNodeWithTag("login_password").performTextInput("anything")
+        composeRule.onNodeWithTag("login_button").performClick()
+
+        composeRule.onNodeWithTag("home_username").assertIsDisplayed()
     }
 }
