@@ -74,7 +74,11 @@ android {
     }
 
     testOptions {
-        unitTests.returnDefaultValues = true
+        unitTests {
+            returnDefaultValues = true
+            // Robolectric needs the merged resources/manifest to inflate the app.
+            includeAndroidResources = true
+        }
     }
 }
 
@@ -101,6 +105,13 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
     testImplementation 'junit:junit:4.13.2'
+    // Runs the real Compose UI on the JVM so the launch and sign-in paths are
+    // executed in CI, where no emulator is available.
+    testImplementation 'org.robolectric:robolectric:4.12.2'
+    testImplementation 'androidx.test.ext:junit:1.1.5'
+    testImplementation platform('androidx.compose:compose-bom:2024.02.01')
+    testImplementation 'androidx.compose.ui:ui-test-junit4'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test:core:1.5.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

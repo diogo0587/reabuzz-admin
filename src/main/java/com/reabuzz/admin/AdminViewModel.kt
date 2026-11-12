@@ -1,5 +1,8 @@
 package com.reabuzz.admin
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.reabuzz.admin.audit.AuditEntry
 import com.reabuzz.admin.audit.AuditLog
@@ -21,10 +24,12 @@ class AdminViewModel(
         data class Failed(val error: AuthError) : LoginState
     }
 
-    var account: Account? = null
+    // Backed by Compose snapshot state: without it the UI never recomposes after
+    // a successful sign-in and the login button appears to do nothing.
+    var account: Account? by mutableStateOf(null)
         private set
 
-    var loginState: LoginState = LoginState.Idle
+    var loginState: LoginState by mutableStateOf<LoginState>(LoginState.Idle)
         private set
 
     val isAuthenticated: Boolean get() = account != null
