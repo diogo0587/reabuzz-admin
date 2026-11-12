@@ -21,8 +21,8 @@ permissions:
 env:
   GRADLE_OPTS: "-Xmx2048m -Dfile.encoding=UTF-8"
   JAVA_VERSION: "17"
-  ANDROID_BUILD_TOOLS: "34.0.0"
-  ANDROID_PLATFORM: "android-34"
+  ANDROID_BUILD_TOOLS: "build-tools;34.0.0"
+  ANDROID_PLATFORM: "platforms;android-34"
 
 jobs:
   release:
@@ -45,8 +45,19 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install SDK platform and build-tools
-        run: sdkmanager "${{ env.ANDROID_PLATFORM }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
+      - name: Ensure Android SDK platform and build-tools
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SM" ]; then SM="$(command -v sdkmanager)"; fi
+          echo "Using sdkmanager: $SM"
+          "$SM" --list_installed 2>/dev/null | grep -E 'platforms;android-34|build-tools;34\.0\.0' || true
+          # Package ids need the "platforms;" prefix; a bare "android-34" is not a
+          # valid id and sdkmanager fails with "Failed to find package".
+          "$SM" --install "${{ env.ANDROID_PLATFORM }}" "${{ env.ANDROID_BUILD_TOOLS }}"
+          echo "--- build-tools ---"; ls "$SDK/build-tools/"
+          echo "--- platforms ---"; ls "$SDK/platforms/"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -114,7 +125,7 @@ jobs:
         id: verify
         run: |
           set -euo pipefail
-          BT="${ANDROID_HOME}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}"
+          BT="${ANDROID_HOME}/build-tools/34.0.0"
           APK=$(find build/outputs/apk/release -name '*.apk' | head -1)
           test -n "$APK"
           "$BT/apksigner" verify --verbose --print-certs "$APK"
